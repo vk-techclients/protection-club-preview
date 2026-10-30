@@ -25,7 +25,7 @@ Send a message and Carlos will call you back. We answer on the first
 </p> </div> <form class="chat-body" data-lead-form data-source="chat-widget" novalidate> <div class="field"> <label>What are you looking to protect?</label> <div class="interest-grid" role="group" aria-label="Choose a service"> <button type="button" class="interest-opt" data-interest-opt data-value="Fire Alarms">Fire Alarms</button><button type="button" class="interest-opt" data-interest-opt data-value="Access Control">Access Control</button><button type="button" class="interest-opt" data-interest-opt data-value="Video Surveillance">Video Surveillance</button><button type="button" class="interest-opt" data-interest-opt data-value="Intrusion Detection">Intrusion Detection</button><button type="button" class="interest-opt" data-interest-opt data-value="Other">Not sure — help me choose</button> </div> <input type="hidden" name="interest" value=""> <p class="form-error" data-error-for="interest" hidden>Pick one so Carlos knows what you need</p> </div> <div class="field"> <label for="cw-name">Name</label> <input id="cw-name" name="name" type="text" autocomplete="name" required> </div> <div class="field"> <label for="cw-phone">Phone</label> <input id="cw-phone" name="phone" type="tel" autocomplete="tel" required> </div> <div class="field"> <label for="cw-email">Email (optional)</label> <input id="cw-email" name="email" type="email" autocomplete="email"> </div> <div class="field"> <label for="cw-desc">Message (optional)</label> <textarea id="cw-desc" name="description" rows="3"></textarea> </div> <div class="hp" aria-hidden="true"> <label>Company website<input name="company_website" type="text" tabindex="-1" autocomplete="off"></label> </div> <p class="form-error" data-submit-error hidden>Something went wrong. Please call us at (713) 253-6344.</p> <button class="btn btn-red" type="submit" data-submit-btn style="justify-content:center">Send Message</button> <p style="font-size:0.78rem;color:var(--slate)">No spam — your message goes to Carlos himself.</p> </form> <div class="chat-body" data-lead-success hidden> <p style="font-size:1.05rem" class="font-heading"><strong>Message received.</strong></p> <p style="color:var(--slate);font-size:0.92rem">
 Carlos will call you back. Your reference number is
 <strong data-ref></strong> — mention it when he calls.
-</p> </div> </div> </div> <script>(function(){const LEAD_ENDPOINT = "https://jlwxwyortlhslxoxwveb.supabase.co/rest/v1/protection_club_leads";
+</p> </div> </div> </div> <script>(function(){const LEAD_ENDPOINT = "https://jlwxwyortlhslxoxwveb.supabase.co/rest/v1/lead";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impsd3h3eW9ydGxoc2x4b3h3dmViIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1MTM5NjgsImV4cCI6MjEwODA4OTk2OH0.ffl-S4efjHt1DCZccfhXzU8An489aljtLSuFVrN5VfI";
 
       (function () {
@@ -38,15 +38,37 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
         }
         function submitLead(payload) {
           var reference_id = makeRef();
+          // House-rail mapping (Oct 30, 2026): leads land in the shared
+          // house intake table `lead` under segment 'protection-club'
+          // until the dedicated protection_club_leads table exists
+          // (see deploy/protection-club-leads.sql). The full lead shape
+          // rides in segment_data; the alert lane reads it from there.
+          var row = {
+            segment: 'protection-club',
+            name: payload.name || null,
+            email: payload.email || null,
+            phone: payload.phone || null,
+            message: payload.description || null,
+            source_page: 'protection-club-preview:' + (payload.source || 'quote-form'),
+            segment_data: {
+              client: 'protection-club',
+              ref: reference_id,
+              service: payload.interest || null,
+              zip: payload.zip_code || null,
+              source: payload.source || null,
+              page: location.pathname,
+            },
+            status: 'new',
+          };
           return fetch(LEAD_ENDPOINT, {
             method: 'POST',
             headers: {
+            headers: {
               apikey: SUPABASE_ANON_KEY,
-              Authorization: 'Bearer ' + SUPABASE_ANON_KEY,
               'Content-Type': 'application/json',
               Prefer: 'return=minimal',
             },
-            body: JSON.stringify(Object.assign({}, payload, { reference_id: reference_id })),
+            body: JSON.stringify(row),
           }).then(function (res) {
             if (res.status !== 201) throw new Error('intake ' + res.status);
             return reference_id;
